@@ -585,4 +585,70 @@
                             <div style="background:#333; height:8px; border-radius:5px; margin:8px 0;">
                                 <div style="background:var(--accent-success); width:${prog}%; height:100%;"></div>
                             </div>
-                            <div style="text-align:right; font-size:0.8rem;">${formatar(m.atual)} / ${formatar(
+                            <div style="text-align:right; font-size:0.8rem;">${formatar(m.atual)} / ${formatar(m.valor)}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Atualizar KPIs
+            saldo = saldo - despesa; // Saldo real
+            document.getElementById('h-saldo').innerText = formatar(saldo);
+            document.getElementById('h-invest').innerText = formatar(invest);
+            document.getElementById('h-despesa').innerText = formatar(despesa);
+            document.getElementById('h-patri').innerText = formatar(saldo + invest);
+
+            renderChart(saldo, invest, despesa);
+        };
+
+        function criarItemHTML(texto, valor, tipo, index, extra='') {
+            return `
+                <div style="display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #333; align-items: center;">
+                    <div>
+                        <div style="font-weight: 600;">${texto}</div>
+                        ${extra ? `<small style="color:var(--accent-primary)">${extra}</small>` : ''}
+                    </div>
+                    <div style="text-align: right;">
+                        <div>${formatar(valor)}</div>
+                        <button class="btn-icon" style="color: var(--accent-danger); font-size:0.8rem;" onclick="remover('${tipo}', ${index})">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatar(v) { return v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+
+        window.showToast = function(msg) {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${msg}`;
+            document.getElementById('toastContainer').appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        };
+
+        function renderChart(s, i, d) {
+            const ctx = document.getElementById('mainChart');
+            if(chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Saldo', 'Investido', 'Despesas'],
+                    datasets: [{
+                        data: [s>0?s:0, i, d],
+                        backgroundColor: ['#00d4ff', '#7c3aed', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: 'white' } } } }
+            });
+        }
+
+        // Init Data
+        document.getElementById('f-data').valueAsDate = new Date();
+        document.getElementById('meta-data').valueAsDate = new Date();
+
+    </script>
+</body>
+</html>
