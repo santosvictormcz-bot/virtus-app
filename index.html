@@ -1,864 +1,433 @@
-import React, { useState } from 'react';
-import { CheckCircle, AlertTriangle, Zap, Code, Shield, Rocket } from 'lucide-react';
-
-export default function VirtusImprovements() {
-  const [activeCategory, setActiveCategory] = useState('critical');
-
-  const improvements = {
-    critical: [
-      {
-        title: "Segurança das Credenciais Firebase",
-        severity: "CRÍTICO",
-        icon: Shield,
-        color: "text-red-500",
-        description: "As credenciais do Firebase estão expostas no código frontend",
-        solution: "Implementar Firebase Security Rules e usar variáveis de ambiente",
-        code: `// Firestore Security Rules (console do Firebase)
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /usuarios/{userId} {
-      // Apenas o próprio usuário pode ler/escrever seus dados
-      allow read, write: if request.auth != null 
-        && request.auth.uid == userId;
-    }
-  }
-}
-
-// Adicionar limitações de taxa
-match /usuarios/{userId} {
-  allow write: if request.auth.uid == userId
-    && request.time > resource.data.lastWrite + duration.value(1, 's');
-}`
-      },
-      {
-        title: "Validação de Dados Inconsistente",
-        severity: "ALTO",
-        icon: AlertTriangle,
-        color: "text-orange-500",
-        description: "Faltam validações robustas nos inputs do usuário",
-        solution: "Implementar sistema de validação centralizado",
-        code: `// validators.js - Adicionar ao seu HTML/JS
-const validators = {
-  valor: (val) => {
-    const num = parseFloat(val);
-    if (isNaN(num)) throw new Error('Valor inválido');
-    if (num <= 0) throw new Error('Valor deve ser positivo');
-    if (num > 999999999) throw new Error('Valor muito alto');
-    return num;
-  },
-  
-  email: (email) => {
-    const regex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-    if (!regex.test(email)) throw new Error('Email inválido');
-    return email.toLowerCase().trim();
-  },
-  
-  descricao: (desc) => {
-    if (!desc || desc.trim().length < 3) {
-      throw new Error('Descrição muito curta (mín. 3 caracteres)');
-    }
-    if (desc.length > 200) {
-      throw new Error('Descrição muito longa (máx. 200 caracteres)');
-    }
-    return desc.trim();
-  },
-  
-  data: (dateStr) => {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) throw new Error('Data inválida');
-    return dateStr;
-  }
-};
-
-// Uso nas funções existentes
-window.adicionarGeral = function() {
-  try {
-    const desc = validators.descricao(document.getElementById('f-desc').value);
-    const valor = validators.valor(document.getElementById('f-valor').value);
-    const data = validators.data(document.getElementById('f-data').value);
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    // ... resto do código
-  } catch (error) {
-    showToast(error.message, 'error');
-    return;
-  }
-};`
-      },
-      {
-        title: "Gerenciamento de Estado Inadequado",
-        severity: "MÉDIO",
-        icon: Code,
-        color: "text-yellow-500",
-        description: "Estado global em variável simples dificulta manutenção e debug",
-        solution: "Implementar sistema de eventos observável",
-        code: `// state-manager.js
-class StateManager {
-  constructor() {
-    this.state = { trans: [], invest: [], metas: [], historico: [] };
-    this.listeners = [];
-  }
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0a0f">
 
-  getState() {
-    return JSON.parse(JSON.stringify(this.state));
-  }
-
-  setState(newState) {
-    this.state = { ...this.state, ...newState };
-    this.notify();
-  }
-
-  subscribe(listener) {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
-    };
-  }
-
-  notify() {
-    this.listeners.forEach(listener => listener(this.state));
-  }
-
-  addTransaction(trans) {
-    this.state.trans.push(trans);
-    this.notify();
-  }
-
-  removeTransaction(index) {
-    this.state.trans.splice(index, 1);
-    this.notify();
-  }
-}
-
-// Uso
-const stateManager = new StateManager();
-
-stateManager.subscribe((state) => {
-  console.log('Estado atualizado:', state);
-  atualizarUI();
-});
-
-stateManager.addTransaction({ desc: 'Teste', valor: 100 });`
-      },
-      {
-        title: "Tratamento de Erros Inadequado",
-        severity: "ALTO",
-        icon: AlertTriangle,
-        color: "text-orange-500",
-        description: "Erros não são capturados adequadamente em operações async",
-        solution: "Implementar error boundaries e retry logic",
-        code: `// error-handler.js
-async function withRetry(fn, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      if (i === maxRetries - 1) throw error;
-      
-      // Exponential backoff
-      await new Promise(resolve => 
-        setTimeout(resolve, Math.pow(2, i) * 1000)
-      );
-    }
-  }
-}
-
-// Melhorar carregarCloud()
-async function carregarCloud() {
-  if (!currentUser) return;
-  
-  try {
-    const docRef = doc(dbCloud, "usuarios", currentUser.uid);
+    <title>VIRTUS CLOUD | Sincronizado</title>
     
-    const snap = await withRetry(async () => {
-      return await getDoc(docRef);
-    });
-    
-    if (snap.exists()) {
-      db = snap.data();
-      if (!db.historico) db.historico = [];
-    } else {
-      db = { trans: [], invest: [], metas: [], historico: [] };
-      await salvarCloud();
-    }
-    
-    atualizarTudo();
-  } catch (error) {
-    console.error('Erro ao carregar dados:', error);
-    showToast('Erro ao carregar. Tentando novamente...', 'error');
-    
-    // Fallback para dados locais se existirem
-    const localData = localStorage.getItem('virtus-backup');
-    if (localData) {
-      db = JSON.parse(localData);
-      showToast('Usando dados locais', 'warning');
-    }
-  }
-}`
-      }
-    ],
-    performance: [
-      {
-        title: "Otimização de Renderizações",
-        severity: "MÉDIO",
-        icon: Zap,
-        color: "text-blue-500",
-        description: "Componentes re-renderizam desnecessariamente",
-        solution: "Implementar debounce e virtual scrolling",
-        code: `// utils.js
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-function throttle(func, limit) {
-  let inThrottle;
-  return function(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  };
-}
-
-// Aplicar no atualizarTudo
-window.atualizarTudo = debounce(function() {
-  // ... código existente
-}, 300);
-
-// Para scrolling pesado
-function renderVisibleItems(items, container, itemHeight) {
-  const scrollTop = container.scrollTop;
-  const viewportHeight = container.clientHeight;
-  
-  const startIndex = Math.floor(scrollTop / itemHeight);
-  const endIndex = Math.ceil((scrollTop + viewportHeight) / itemHeight);
-  
-  return items.slice(startIndex, endIndex + 1);
-}`
-      },
-      {
-        title: "Carregamento de Charts Pesado",
-        severity: "MÉDIO",
-        icon: Zap,
-        color: "text-blue-500",
-        description: "Charts são recriados a cada atualização desnecessariamente",
-        solution: "Implementar cache de dados e lazy loading",
-        code: `// chart-manager.js
-const chartCache = new Map();
-
-function updateChart(chartId, newData) {
-  const cachedData = chartCache.get(chartId);
-  
-  // Comparar dados para evitar re-render
-  if (cachedData && JSON.stringify(cachedData) === JSON.stringify(newData)) {
-    return; // Dados não mudaram
-  }
-  
-  chartCache.set(chartId, newData);
-  
-  if (chartInstance) {
-    // Atualizar ao invés de recriar
-    chartInstance.data = newData;
-    chartInstance.update('none'); // Sem animação
-  } else {
-    // Criar novo chart
-    createChart(chartId, newData);
-  }
-}
-
-// Intersection Observer para lazy load
-const chartObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      const chartId = entry.target.id;
-      loadChart(chartId);
-      chartObserver.unobserve(entry.target);
-    }
-  });
-});
-
-document.querySelectorAll('canvas').forEach(canvas => {
-  chartObserver.observe(canvas);
-});`
-      },
-      {
-        title: "Otimizar Salvamento no Cloud",
-        severity: "ALTO",
-        icon: Zap,
-        color: "text-orange-500",
-        description: "Cada alteração salva imediatamente no Firestore",
-        solution: "Implementar batching e salvamento periódico",
-        code: `// sync-manager.js
-class SyncManager {
-  constructor() {
-    this.pendingChanges = [];
-    this.syncInterval = null;
-    this.isSyncing = false;
-  }
-
-  queueChange(change) {
-    this.pendingChanges.push({
-      ...change,
-      timestamp: Date.now()
-    });
-    
-    // Salvar localmente imediatamente
-    this.saveLocal();
-    
-    // Iniciar sync automático se não estiver rodando
-    if (!this.syncInterval) {
-      this.startAutoSync();
-    }
-  }
-
-  saveLocal() {
-    localStorage.setItem('virtus-backup', JSON.stringify(db));
-    localStorage.setItem('virtus-pending', JSON.stringify(this.pendingChanges));
-  }
-
-  async syncToCloud() {
-    if (this.isSyncing || this.pendingChanges.length === 0) return;
-    
-    this.isSyncing = true;
-    
-    try {
-      await salvarCloud();
-      this.pendingChanges = [];
-      localStorage.removeItem('virtus-pending');
-    } catch (error) {
-      console.error('Erro ao sincronizar:', error);
-    } finally {
-      this.isSyncing = false;
-    }
-  }
-
-  startAutoSync() {
-    // Sincronizar a cada 30 segundos
-    this.syncInterval = setInterval(() => {
-      this.syncToCloud();
-    }, 30000);
-  }
-
-  stopAutoSync() {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
-    }
-  }
-}
-
-const syncManager = new SyncManager();
-
-// Usar no lugar de salvarCloud direto
-window.adicionarGeral = function() {
-  // ... validações
-  db.trans.push({ desc, valor, data, tipo, parc: 1, pago: tipo === 'Receita' });
-  syncManager.queueChange({ type: 'ADD_TRANSACTION' });
-  atualizarTudo();
-};`
-      }
-    ],
-    features: [
-      {
-        title: "Sistema de Backup Automático",
-        severity: "NOVO",
-        icon: Rocket,
-        color: "text-purple-500",
-        description: "Backup automático dos dados em múltiplos locais",
-        solution: "localStorage + download periódico",
-        code: `// backup-manager.js
-class BackupManager {
-  constructor() {
-    this.lastBackup = null;
-    this.startAutoBackup();
-  }
-
-  createBackup() {
-    const backup = {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      data: db,
-      checksum: this.generateChecksum(db)
-    };
-    
-    // Salvar em localStorage
-    localStorage.setItem('virtus-backup', JSON.stringify(backup));
-    
-    // Manter histórico dos últimos 5 backups
-    const history = JSON.parse(
-      localStorage.getItem('virtus-backup-history') || '[]'
-    );
-    history.unshift(backup);
-    history.splice(5); // Manter só 5
-    localStorage.setItem('virtus-backup-history', JSON.stringify(history));
-    
-    this.lastBackup = Date.now();
-    return backup;
-  }
-
-  generateChecksum(data) {
-    // Simples hash para integridade
-    const str = JSON.stringify(data);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return hash.toString(36);
-  }
-
-  downloadBackup() {
-    const backup = this.createBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], 
-      { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = \`virtus-backup-\${new Date().toISOString().split('T')[0]}.json\`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  restoreBackup(backupData) {
-    if (this.generateChecksum(backupData.data) !== backupData.checksum) {
-      throw new Error('Backup corrompido - checksum inválido');
-    }
-    
-    db = backupData.data;
-    salvarCloud();
-    atualizarTudo();
-    showToast('Backup restaurado com sucesso!', 'success');
-  }
-
-  startAutoBackup() {
-    // Backup automático a cada 5 minutos
-    setInterval(() => {
-      if (Date.now() - this.lastBackup > 300000) {
-        this.createBackup();
-      }
-    }, 60000);
-  }
-}
-
-const backupManager = new BackupManager();`
-      },
-      {
-        title: "Modo Offline Básico",
-        severity: "NOVO",
-        icon: Rocket,
-        color: "text-purple-500",
-        description: "Permitir uso básico sem conexão",
-        solution: "Detectar offline e usar localStorage",
-        code: `// offline-manager.js
-class OfflineManager {
-  constructor() {
-    this.isOnline = navigator.onLine;
-    this.setupListeners();
-  }
-
-  setupListeners() {
-    window.addEventListener('online', () => {
-      this.isOnline = true;
-      this.syncPendingChanges();
-      showToast('Conexão restaurada! Sincronizando...', 'success');
-    });
-
-    window.addEventListener('offline', () => {
-      this.isOnline = false;
-      showToast('Modo offline ativado', 'warning');
-    });
-  }
-
-  async syncPendingChanges() {
-    const pending = localStorage.getItem('virtus-pending-sync');
-    if (!pending) return;
-
-    try {
-      const changes = JSON.parse(pending);
-      for (const change of changes) {
-        await this.applyChange(change);
-      }
-      localStorage.removeItem('virtus-pending-sync');
-      showToast('Dados sincronizados!', 'success');
-    } catch (error) {
-      console.error('Erro ao sincronizar:', error);
-      showToast('Erro na sincronização', 'error');
-    }
-  }
-
-  queueForSync(change) {
-    const pending = JSON.parse(
-      localStorage.getItem('virtus-pending-sync') || '[]'
-    );
-    pending.push({
-      ...change,
-      timestamp: Date.now()
-    });
-    localStorage.setItem('virtus-pending-sync', JSON.stringify(pending));
-  }
-
-  async save(data) {
-    // Sempre salvar localmente
-    localStorage.setItem('virtus-data', JSON.stringify(data));
-
-    if (this.isOnline) {
-      try {
-        await salvarCloud();
-      } catch (error) {
-        console.error('Erro ao salvar na nuvem:', error);
-        this.queueForSync({ type: 'SAVE', data });
-      }
-    } else {
-      this.queueForSync({ type: 'SAVE', data });
-    }
-  }
-}
-
-const offlineManager = new OfflineManager();`
-      },
-      {
-        title: "Exportação Avançada (CSV)",
-        severity: "NOVO",
-        icon: Rocket,
-        color: "text-purple-500",
-        description: "Exportar dados em formato CSV para Excel",
-        solution: "Gerar CSV manualmente sem bibliotecas externas",
-        code: `// export-manager.js
-function exportToCSV(data, filename) {
-  // Converter dados para CSV
-  const headers = Object.keys(data[0]);
-  const csvContent = [
-    headers.join(','),
-    ...data.map(row => 
-      headers.map(header => {
-        const value = row[header];
-        // Escapar vírgulas e aspas
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-          return '"' + value.replace(/"/g, '""') + '"';
+    <style>
+        /* ESTILOS (Mantendo o design original com adições para Login) */
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-medium: #13131a;
+            --sidebar-bg: #0f0f14;
+            --card-bg: #1a1a24;
+            --card-hover: #1f1f2e;
+            --text-main: #f5f5f7;
+            --text-dim: #9999a8;
+            --accent-primary: #00d4ff;
+            --accent-secondary: #7c3aed;
+            --accent-success: #10b981;
+            --accent-danger: #ef4444;
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+            --safe-area-top: env(safe-area-inset-top);
         }
-        return value;
-      }).join(',')
-    )
-  ].join('\\n');
 
-  // Download
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg-dark); color: var(--text-main); min-height: 100vh; overflow-x: hidden; }
 
-function exportarRelatorio() {
-  // Preparar dados das transações
-  const transacoesCSV = db.trans.map(t => ({
-    'Data': t.data,
-    'Descrição': t.desc,
-    'Valor': t.valor.toFixed(2),
-    'Tipo': t.tipo,
-    'Status': t.pago ? 'Pago' : 'Pendente'
-  }));
+        /* TELA DE LOGIN */
+        #auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark); z-index: 20000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .auth-card {
+            width: 100%; max-width: 400px;
+            background: var(--card-bg);
+            padding: 40px; border-radius: 24px;
+            border: 1px solid var(--sidebar-bg);
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.1);
+            text-align: center;
+        }
+        .auth-logo {
+            font-size: 3rem; margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-family: 'Space Mono', monospace; font-weight: 700;
+        }
 
-  exportToCSV(transacoesCSV, \`virtus-transacoes-\${new Date().toISOString().split('T')[0]}.csv\`);
+        /* LAYOUT PRINCIPAL */
+        .app-wrapper { display: none; min-height: 100vh; } /* Escondido até logar */
+        .sidebar { width: 280px; background: var(--sidebar-bg); border-right: 1px solid #2a2a38; position: fixed; height: 100vh; z-index: 1000; padding-top: var(--safe-area-top); transition: transform 0.3s; }
+        .main-content { flex: 1; margin-left: 280px; padding: 32px; padding-top: calc(32px + var(--safe-area-top)); }
+        
+        /* UTILITÁRIOS */
+        .btn { padding: 12px 20px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; width: 100%; justify-content: center; transition: 0.2s; font-size: 1rem; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: white; }
+        .btn-primary:hover { box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); }
+        .form-input { width: 100%; background: var(--bg-medium); border: 1px solid #333; color: white; padding: 14px; border-radius: 10px; margin-bottom: 15px; font-size: 1rem; }
+        .form-input:focus { border-color: var(--accent-primary); outline: none; }
+        
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background: var(--card-bg); padding: 24px; border-radius: 16px; border: 1px solid #2a2a38; }
+        .kpi-value { font-size: 1.8rem; font-weight: 700; font-family: 'Space Mono'; margin-top: 10px; }
+        .section-box { background: var(--card-bg); border: 1px solid #2a2a38; border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+        .nav-item { padding: 15px 20px; cursor: pointer; display: flex; gap: 12px; color: var(--text-dim); transition: 0.2s; border-radius: 8px; margin: 4px 8px; }
+        .nav-item.active { background: rgba(0, 212, 255, 0.1); color: var(--accent-primary); }
+        .nav-item:hover { color: white; background: rgba(255,255,255,0.05); }
 
-  // Investimentos
-  const investCSV = db.invest.map(inv => ({
-    'Ativo': inv.onde,
-    'Valor': inv.valor.toFixed(2),
-    'Taxa Mensal': ((inv.taxa || 0) * 100).toFixed(2) + '%',
-    'Categoria': inv.tipo,
-    'Rendimento Mensal': (inv.valor * (inv.taxa || 0)).toFixed(2)
-  }));
+        .loader { width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-  exportToCSV(investCSV, \`virtus-investimentos-\${new Date().toISOString().split('T')[0]}.csv\`);
-  
-  showToast('Relatórios exportados!', 'success');
-}`
-      },
-      {
-        title: "Dashboard de Análises Avançado",
-        severity: "NOVO",
-        icon: Rocket,
-        color: "text-purple-500",
-        description: "Adicionar análises e insights automáticos",
-        solution: "Calcular métricas e gerar insights",
-        code: `// analytics.js
-function gerarInsights() {
-  const insights = [];
-  
-  // Calcular médias
-  const gastosUltimos30Dias = db.trans
-    .filter(t => t.tipo !== 'Receita')
-    .filter(t => {
-      const diff = Date.now() - new Date(t.data).getTime();
-      return diff < 30 * 24 * 60 * 60 * 1000;
-    })
-    .reduce((sum, t) => sum + t.valor, 0);
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); width: 85%; }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 20px; padding-bottom: 80px; }
+            .mobile-btn { display: block; position: fixed; top: 15px; left: 15px; z-index: 1001; background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid #333; color: white; }
+        }
+        .hidden { display: none !important; }
+        .mobile-btn { display: none; }
+    </style>
+</head>
+<body>
 
-  const mediaGastoDiario = gastosUltimos30Dias / 30;
-
-  // Insight 1: Gastos acima da média
-  if (mediaGastoDiario > 100) {
-    insights.push({
-      tipo: 'warning',
-      titulo: 'Gastos Elevados',
-      mensagem: \`Sua média diária de R$ \${mediaGastoDiario.toFixed(2)} está acima do recomendado\`,
-      acao: 'Revisar gastos diários'
-    });
-  }
-
-  // Insight 2: Metas próximas
-  const metasProximas = db.metas?.filter(m => {
-    const progresso = (m.atual / m.valor) * 100;
-    return progresso >= 80 && progresso < 100;
-  }) || [];
-
-  if (metasProximas.length > 0) {
-    insights.push({
-      tipo: 'success',
-      titulo: 'Metas Próximas!',
-      mensagem: \`Você está perto de alcançar \${metasProximas.length} meta(s)!\`,
-      acao: 'Ver metas'
-    });
-  }
-
-  // Insight 3: Diversificação de investimentos
-  if (db.invest.length > 0) {
-    const tiposInvest = new Set(db.invest.map(i => i.tipo));
-    if (tiposInvest.size === 1) {
-      insights.push({
-        tipo: 'info',
-        titulo: 'Diversifique seus Investimentos',
-        mensagem: 'Considere diversificar em diferentes categorias',
-        acao: 'Ver sugestões'
-      });
-    }
-  }
-
-  return insights;
-}
-
-// Renderizar insights
-function renderizarInsights() {
-  const insights = gerarInsights();
-  const container = document.getElementById('insights-container');
-  
-  container.innerHTML = insights.map(insight => \`
-    <div class="section-box" style="border-left: 4px solid var(--accent-\${
-      insight.tipo === 'warning' ? 'warning' :
-      insight.tipo === 'success' ? 'success' : 'primary'
-    })">
-      <h4 style="margin-bottom: 8px; color: var(--accent-\${
-        insight.tipo === 'warning' ? 'warning' :
-        insight.tipo === 'success' ? 'success' : 'primary'
-      })">\${insight.titulo}</h4>
-      <p style="color: var(--text-dim); margin-bottom: 12px;">\${insight.mensagem}</p>
-      <button class="btn btn-secondary" style="width: auto;">
-        \${insight.acao} <i class="fa-solid fa-arrow-right"></i>
-      </button>
-    </div>
-  \`).join('');
-}`
-      }
-    ],
-    ux: [
-      {
-        title: "Feedback Visual Melhorado",
-        severity: "MÉDIO",
-        icon: CheckCircle,
-        color: "text-green-500",
-        description: "Adicionar estados de loading e animações suaves",
-        solution: "Implementar skeleton screens e loading states",
-        code: `// loading-states.js
-function showSkeleton(containerId, count = 3) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = Array(count).fill('').map(() => \`
-    <div class="skeleton-card">
-      <div class="skeleton-line" style="width: 70%; height: 20px;"></div>
-      <div class="skeleton-line" style="width: 40%; height: 16px; margin-top: 12px;"></div>
-      <div class="skeleton-line" style="width: 90%; height: 14px; margin-top: 8px;"></div>
-    </div>
-  \`).join('');
-}
-
-// CSS adicional
-.skeleton-card {
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 12px;
-}
-
-.skeleton-line {
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.05) 25%,
-    rgba(255,255,255,0.1) 50%,
-    rgba(255,255,255,0.05) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 6px;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-// Usar antes de carregar dados
-showSkeleton('lista-invest');
-// ... carregar dados
-// ... atualizar com dados reais`
-      },
-      {
-        title: "Acessibilidade (a11y)",
-        severity: "MÉDIO",
-        icon: CheckCircle,
-        color: "text-green-500",
-        description: "Melhorar navegação por teclado e screen readers",
-        solution: "Adicionar ARIA labels e suporte a teclado",
-        code: `// Melhorar botões existentes
-function criarStatsCard(desc, valor, tipo, index, icon) {
-  return \`
-    <div class="stats-card" role="article" aria-label="Transação: \${desc}">
-      <div style="flex: 1;">
-        <div style="font-weight: 600;">\${icon} \${desc}</div>
-        <div style="color: var(--accent-danger); font-size: 1.1rem; margin-top: 4px;">
-          \${formatar(valor)}
+    <div id="auth-screen">
+        <div class="auth-card">
+            <div class="auth-logo">VIRTUS</div>
+            <p style="color: var(--text-dim); margin-bottom: 30px;">Financeiro Cloud Seguro</p>
+            
+            <form id="login-form">
+                <input type="email" id="email" class="form-input" placeholder="Seu E-mail" required>
+                <input type="password" id="password" class="form-input" placeholder="Sua Senha" required>
+                
+                <button type="submit" class="btn btn-primary" id="btn-login">
+                    <span class="btn-text">Entrar / Registrar</span>
+                    <div class="loader"></div>
+                </button>
+            </form>
+            <p style="margin-top: 20px; font-size: 0.85rem; color: var(--text-dim);">
+                Ao entrar, uma conta será criada se não existir.
+            </p>
         </div>
-      </div>
-      <button 
-        class="btn-icon" 
-        onclick="remover('\${tipo}', \${index})"
-        aria-label="Remover \${desc}"
-        title="Remover transação"
-      >
-        <i class="fa-solid fa-trash" aria-hidden="true"></i>
-      </button>
     </div>
-  \`;
-}
 
-// Adicionar navegação por teclado
-document.addEventListener('keydown', (e) => {
-  // Ctrl/Cmd + N = Nova transação
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-    e.preventDefault();
-    document.getElementById('f-desc').focus();
-  }
-  
-  // Ctrl/Cmd + S = Salvar/Sync
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    syncManager.syncToCloud();
-    showToast('Salvando...', 'info');
-  }
-  
-  // Esc = Fechar modal
-  if (e.key === 'Escape') {
-    const modals = document.querySelectorAll('.modal-overlay');
-    modals.forEach(m => m.style.display = 'none');
-  }
-});
+    <button class="mobile-btn" onclick="toggleMenu()"><i class="fa-solid fa-bars"></i></button>
 
-// Anunciar mudanças para screen readers
-function anunciar(mensagem) {
-  const announcer = document.getElementById('sr-announcer') || (() => {
-    const el = document.createElement('div');
-    el.id = 'sr-announcer';
-    el.setAttribute('aria-live', 'polite');
-    el.setAttribute('aria-atomic', 'true');
-    el.style.cssText = 'position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;';
-    document.body.appendChild(el);
-    return el;
-  })();
-  
-  announcer.textContent = mensagem;
-}`
-      },
-      {
-        title: "Modo Escuro/Claro",
-        severity: "BAIXO",
-        icon: CheckCircle,
-        color: "text-green-500",
-        description: "Adicionar alternância entre temas",
-        solution: "Sistema de temas com CSS variables",
-        code: `// theme-manager.js
-const themes = {
-  dark: {
-    '--bg-dark': '#0a0a0f',
-    '--bg-medium': '#13131a',
-    '--card-bg': '#1a1a24',
-    '--text-main': '#f5f5f7',
-    '--text-dim': '#9999a8'
-  },
-  light: {
-    '--bg-dark': '#f5f5f7',
-    '--bg-medium': '#ffffff',
-    '--card-bg': '#ffffff',
-    '--text-main': '#0a0a0f',
-    '--text-dim': '#5d5d6b'
-  }
-};
+    <div class="app-wrapper" id="app-wrapper">
+        <aside class="sidebar" id="sidebar">
+            <div style="padding: 30px 20px;">
+                <div style="font-family: 'Space Mono'; font-weight: 700; font-size: 1.5rem; color: white;">VIRTUS <span style="color: var(--accent-primary)">CLOUD</span></div>
+                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 5px;" id="user-email-display">Carregando...</div>
+            </div>
+            
+            <nav>
+                <div class="nav-item active" onclick="nav('home')"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
+                <div class="nav-item" onclick="nav('lancar')"><i class="fa-solid fa-plus-circle"></i> Lançar</div>
+                <div class="nav-item" onclick="nav('extrato')"><i class="fa-solid fa-list"></i> Extrato</div>
+                <div class="nav-item" onclick="logout()"><i class="fa-solid fa-sign-out-alt"></i> Sair</div>
+            </nav>
+        </aside>
 
-function setTheme(themeName) {
-  const theme = themes[themeName];
-  const root = document.documentElement;
-  
-  Object.keys(theme).forEach(property => {
-    root.style.setProperty(property, theme[property]);
-  });
-  
-  localStorage.setItem('virtus-theme', themeName);
-}
+        <main class="main-content">
+            <div id="view-home">
+                <h2 style="margin-bottom: 20px;">Visão Geral</h2>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div style="color: var(--text-dim); font-size: 0.9rem;">SALDO ATUAL</div>
+                        <div class="kpi-value" id="kpi-saldo" style="color: var(--accent-primary);">R$ 0,00</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div style="color: var(--text-dim); font-size: 0.9rem;">RECEITAS (MÊS)</div>
+                        <div class="kpi-value" id="kpi-receita" style="color: var(--accent-success);">R$ 0,00</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div style="color: var(--text-dim); font-size: 0.9rem;">DESPESAS (MÊS)</div>
+                        <div class="kpi-value" id="kpi-despesa" style="color: var(--accent-danger);">R$ 0,00</div>
+                    </div>
+                </div>
+                
+                <div class="section-box">
+                    <h3>Últimos Lançamentos</h3>
+                    <div id="lista-recente" style="margin-top: 15px;">
+                        <p style="color: var(--text-dim); text-align: center;">Carregando...</p>
+                    </div>
+                </div>
+            </div>
 
-function toggleTheme() {
-  const currentTheme = localStorage.getItem('virtus-theme') || 'dark';
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  setTheme(newTheme);
-  
-  // Animar transição
-  document.body.style.transition = 'background-color 0.3s ease';
-}
+            <div id="view-lancar" class="hidden">
+                <h2 style="margin-bottom: 20px;">Novo Lançamento</h2>
+                <div class="section-box" style="max-width: 600px;">
+                    <form id="form-transacao">
+                        <label style="color: var(--text-dim); font-size: 0.85rem;">DESCRIÇÃO</label>
+                        <input type="text" id="t-desc" class="form-input" placeholder="Ex: Mercado, Salário..." required>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="color: var(--text-dim); font-size: 0.85rem;">VALOR</label>
+                                <input type="number" id="t-valor" class="form-input" step="0.01" placeholder="0.00" required>
+                            </div>
+                            <div>
+                                <label style="color: var(--text-dim); font-size: 0.85rem;">DATA</label>
+                                <input type="date" id="t-data" class="form-input" required>
+                            </div>
+                        </div>
 
-// Adicionar botão de toggle no sidebar
-const themeToggle = \`
-  <button 
-    class="btn btn-secondary" 
-    onclick="toggleTheme()"
-    aria-label="Alternar tema"
-  >
-    <i class="fa-solid fa-moon"></i>
-    Tema
-  </button>
-\`;
+                        <label style="color: var(--text-dim); font-size: 0.85rem;">TIPO</label>
+                        <select id="t-tipo" class="form-input">
+                            <option value="despesa">💸 Despesa</option>
+                            <option value="receita">💰 Receita</option>
+                        </select>
 
-// Inicializar tema salvo
-const savedTheme = localStorage.getItem('virtus-theme') || 'dark';
-setTheme(savedTheme);`
-      }
-    ]
-  };
+                        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                            <i class="fa-solid fa-check"></i> Salvar na Nuvem
+                        </button>
+                    </form>
+                </div>
+            </div>
 
-  const categories = [
-    { id: 'critical', label: 'Críticas', icon: Shield },
-    { id: 'performance', label: 'Performance', icon: Zap },
-    { id: 'features', label: 'Novas Features', icon: Rocket },
-    { id: 'ux', label: 'UX/UI', icon: CheckCircle }
-  ];
+            <div id="view-extrato" class="hidden">
+                <h2 style="margin-bottom: 20px;">Extrato Completo</h2>
+                <div class="section-box">
+                    <div id="lista-completa"></div>
+                </div>
+            </div>
+        </main>
+    </div>
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 text-white p
+    <script type="module">
+        // Importando as bibliotecas do Google (versão Web/CDN)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // SUA CONFIGURAÇÃO (Já integrada)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDw6w_GjiNA9Pexxxt8HMZEnmH_kUJpEtc",
+            authDomain: "virtusapp-c3810.firebaseapp.com",
+            projectId: "virtusapp-c3810",
+            storageBucket: "virtusapp-c3810.firebasestorage.app",
+            messagingSenderId: "947824991501",
+            appId: "1:947824991501:web:a99c301848af36691a6444",
+            measurementId: "G-7VPGDDZLVF"
+        };
+
+        // INICIALIZAÇÃO
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // VARIÁVEIS GLOBAIS
+        let currentUser = null;
+        let localData = { transacoes: [] };
+
+        // === SISTEMA DE LOGIN ===
+        const loginForm = document.getElementById('login-form');
+        const authScreen = document.getElementById('auth-screen');
+        const appWrapper = document.getElementById('app-wrapper');
+        const btnLogin = document.getElementById('btn-login');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            setLoading(true);
+
+            try {
+                // Tenta fazer login
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                // Se der erro de usuário não encontrado ou credencial inválida, tenta CRIAR a conta
+                if(error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+                    try {
+                        await createUserWithEmailAndPassword(auth, email, password);
+                        alert("Conta criada com sucesso! Bem-vindo ao Virtus Cloud.");
+                    } catch (createError) {
+                        alert("Erro ao criar conta: " + createError.message);
+                    }
+                } else {
+                    alert("Erro ao entrar: " + error.message);
+                }
+            }
+            setLoading(false);
+        });
+
+        // MONITORAR SE O USUÁRIO ENTROU OU SAIU
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Usuário entrou
+                currentUser = user;
+                document.getElementById('user-email-display').innerText = user.email;
+                authScreen.style.display = 'none';
+                appWrapper.style.display = 'flex';
+                document.querySelector('.mobile-btn').classList.remove('hidden');
+                document.querySelector('.mobile-btn').style.display = 'block';
+                await carregarDados();
+            } else {
+                // Usuário saiu
+                currentUser = null;
+                authScreen.style.display = 'flex';
+                appWrapper.style.display = 'none';
+                document.querySelector('.mobile-btn').style.display = 'none';
+            }
+        });
+
+        // === BANCO DE DADOS (NUVEM) ===
+        async function carregarDados() {
+            if(!currentUser) return;
+            // Busca o documento com o ID igual ao ID do usuário
+            const docRef = doc(db, "usuarios", currentUser.uid);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                // Se já tem dados, carrega
+                localData = docSnap.data();
+            } else {
+                // Se é novo, cria um banco vazio na nuvem
+                localData = { transacoes: [] };
+                await salvarNaNuvem();
+            }
+            atualizarUI();
+        }
+
+        async function salvarNaNuvem() {
+            if(!currentUser) return;
+            const docRef = doc(db, "usuarios", currentUser.uid);
+            await setDoc(docRef, localData, { merge: true });
+            atualizarUI();
+        }
+
+        // === NAVEGAÇÃO E INTERFACE ===
+        window.nav = function(view) {
+            document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + view).classList.remove('hidden');
+            
+            // Fecha menu no mobile
+            if(window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('active');
+            }
+        }
+
+        window.toggleMenu = function() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        window.logout = function() {
+            if(confirm("Deseja realmente sair?")) {
+                signOut(auth);
+            }
+        }
+
+        // SALVAR TRANSAÇÃO
+        document.getElementById('form-transacao').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loader" style="display:block"></div>';
+            btn.disabled = true;
+
+            const nova = {
+                id: Date.now(),
+                desc: document.getElementById('t-desc').value,
+                valor: parseFloat(document.getElementById('t-valor').value),
+                data: document.getElementById('t-data').value,
+                tipo: document.getElementById('t-tipo').value
+            };
+
+            localData.transacoes.push(nova);
+            
+            // Envia para o Google
+            await salvarNaNuvem();
+            
+            // Limpa formulário
+            document.getElementById('form-transacao').reset();
+            document.getElementById('t-data').valueAsDate = new Date();
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            
+            alert('Lançamento salvo na nuvem!');
+            nav('home');
+        });
+
+        function atualizarUI() {
+            // Cálculos
+            let saldo = 0, rec = 0, desp = 0;
+            const hoje = new Date();
+            const mesAtual = hoje.getMonth();
+            const anoAtual = hoje.getFullYear();
+
+            // Ordena transações (mais recente primeiro)
+            const transacoesOrdenadas = localData.transacoes.slice().sort((a, b) => {
+                return new Date(b.data) - new Date(a.data);
+            });
+
+            transacoesOrdenadas.forEach(t => {
+                const val = parseFloat(t.valor);
+                // Gambiarra para timezone (para a data não voltar 1 dia)
+                const partesData = t.data.split('-');
+                const d = new Date(partesData[0], partesData[1] - 1, partesData[2]);
+                
+                if(t.tipo === 'receita') {
+                    saldo += val;
+                    if(d.getMonth() === mesAtual && d.getFullYear() === anoAtual) rec += val;
+                } else {
+                    saldo -= val;
+                    if(d.getMonth() === mesAtual && d.getFullYear() === anoAtual) desp += val;
+                }
+            });
+
+            // Atualiza KPIs
+            document.getElementById('kpi-saldo').innerText = formatar(saldo);
+            document.getElementById('kpi-receita').innerText = formatar(rec);
+            document.getElementById('kpi-despesa').innerText = formatar(desp);
+
+            // Gera HTML da lista
+            const listaHTML = transacoesOrdenadas.map(t => {
+                const partesData = t.data.split('-');
+                const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+                
+                return `
+                <div style="display:flex; justify-content:space-between; padding: 15px; border-bottom: 1px solid #333; align-items:center;">
+                    <div>
+                        <div style="font-weight:600;">${t.desc}</div>
+                        <div style="font-size:0.8rem; color:var(--text-dim);">${dataFormatada}</div>
+                    </div>
+                    <div style="font-family:'Space Mono'; font-weight:700; color: ${t.tipo === 'receita' ? 'var(--accent-success)' : 'var(--accent-danger)'}">
+                        ${t.tipo === 'receita' ? '+' : '-'} ${formatar(t.valor)}
+                    </div>
+                </div>
+            `}).join('');
+
+            const vazioHTML = '<div style="text-align:center; padding:30px; color:#666;"><i class="fa-solid fa-ghost" style="font-size:2rem; margin-bottom:10px;"></i><br>Sem lançamentos</div>';
+
+            document.getElementById('lista-recente').innerHTML = transacoesOrdenadas.length ? listaHTML : vazioHTML;
+            document.getElementById('lista-completa').innerHTML = transacoesOrdenadas.length ? listaHTML : vazioHTML;
+        }
+
+        function formatar(val) {
+            return val.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+        }
+
+        function setLoading(state) {
+            const txt = btnLogin.querySelector('.btn-text');
+            const load = btnLogin.querySelector('.loader');
+            
+            if(state) {
+                txt.style.display = 'none';
+                load.style.display = 'block';
+                btnLogin.disabled = true;
+            } else {
+                txt.style.display = 'block';
+                load.style.display = 'none';
+                btnLogin.disabled = false;
+            }
+        }
+
+        // Inicializa data do formulário como Hoje
+        document.getElementById('t-data').valueAsDate = new Date();
+    </script>
+</body>
+</html>
